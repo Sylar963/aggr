@@ -1,3 +1,4 @@
+import THALEX from  './THALEX.svg'
 import BINANCE from './BINANCE.svg'
 import BINANCE_FUTURES from './BINANCE_FUTURES.svg'
 import BINANCE_US from './BINANCE_US.svg'
@@ -26,6 +27,7 @@ import HYPERLIQUID from './HYPERLIQUID.svg'
 import WHITEBIT from './WHITEBIT.svg'
 
 export default {
+  THALEX,
   BINANCE,
   BINANCE_FUTURES,
   BINANCE_US,
