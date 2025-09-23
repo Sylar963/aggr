@@ -27,6 +27,7 @@ import CryptoCom from './cryptocom'
 import Bitmart from './bitmart'
 import Hyperliquid from './hyperliquid'
 import WhiteBIT from './whitebit'
+import THALEX from './thalex'
 
 export const exchanges = [
   new Aggr(),
@@ -55,7 +56,8 @@ export const exchanges = [
   new CryptoCom(),
   new Bitmart(),
   new Hyperliquid(),
-  new WhiteBIT()
+  new WhiteBIT(),
+  new THALEX()
 ] as Exchange[]
 
 export function getExchangeById(id: string) {
