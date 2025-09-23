@@ -16,7 +16,7 @@ export default class THALEX extends Exchange {
   }
 
   /**
-   * Subscribe to THALEX recent trades
+   * Subscribe to THALEX order book trades
    */
   async subscribe(api: any, pair: string): Promise<boolean> {
     if (!(await super.subscribe(api, pair))) {
@@ -27,7 +27,7 @@ export default class THALEX extends Exchange {
       JSON.stringify({
         method: 'public/subscribe',
         params: {
-          channels: [`recent_trades.${pair}.single`]
+          channels: [`book.${pair}.none.all.raw`]
         },
         id: Date.now()
       })
@@ -39,7 +39,7 @@ export default class THALEX extends Exchange {
 
 
   /**
-   * Unsubscribe from THALEX recent trades
+   * Unsubscribe from THALEX order book trades
    */
   async unsubscribe(api: any, pair: string): Promise<boolean> {
     if (!(await super.unsubscribe(api, pair))) {
@@ -50,7 +50,7 @@ export default class THALEX extends Exchange {
       JSON.stringify({
         method: 'public/unsubscribe',
         params: {
-          channels: [`recent_trades.${pair}.single`]
+          channels: [`book.${pair}.none.all.raw`]
         },
         id: Date.now()
       })
@@ -80,8 +80,29 @@ export default class THALEX extends Exchange {
 
       // Handle market data notifications
       if (json.channel_name && json.notification) {
-        // Handle recent trades data
-        if (json.channel_name.startsWith('recent_trades.')) {
+        // Handle book trade data
+        if (json.channel_name.startsWith('book.')) {
+          const pair = this.extractPairFromBookChannel(json.channel_name)
+          console.debug(`[${this.id}] 🎯 Received book trades for ${pair}`)
+
+          if (
+            json.notification.trades &&
+            Array.isArray(json.notification.trades) &&
+            json.notification.trades.length > 0 &&
+            !json.snapshot // Skip snapshot trades to avoid flooding with old data
+          ) {
+            const trades = json.notification.trades
+              .map(tradeArray => this.formatBookTrade(pair, tradeArray))
+              .filter(trade => trade !== null)
+
+            if (trades.length > 0) {
+              this.emitTrades(api.id, trades)
+              console.debug(`[${this.id}] ✅ Emitted ${trades.length} book trades for ${pair}`)
+            }
+          }
+        }
+        // Handle recent trades data (fallback/backward compatibility)
+        else if (json.channel_name.startsWith('recent_trades.')) {
           const pair = this.extractPairFromRecentTradesChannel(json.channel_name)
           console.debug(`[${this.id}] 🎯 Received trades for ${pair}`)
 
@@ -96,6 +117,7 @@ export default class THALEX extends Exchange {
             }
           }
         }
+
       }
 
       return true
@@ -117,6 +139,20 @@ export default class THALEX extends Exchange {
     }
     return channel // Fallback
   }
+
+  /**
+   * Extract pair name from book channel string
+   */
+  private extractPairFromBookChannel(channel: string): string {
+    // Format: book.BTC-PERPETUAL.none.all.raw
+    const parts = channel.split('.')
+    if (parts.length >= 5 && parts[0] === 'book') {
+      return parts[1] // The pair is the second part
+    }
+    return channel // Fallback
+  }
+
+
 
   /**
    * Format recent trade data from THALEX API
@@ -142,6 +178,33 @@ export default class THALEX extends Exchange {
       source: 'recent_trades' // Mark this as real trade data
     }
   }
+
+  /**
+   * Format book trade data from THALEX API
+   * Trade format: [price, amount, direction, timestamp, implied_taker]
+   */
+  formatBookTrade(market: string, tradeArray: any[]): any | null {
+    if (!Array.isArray(tradeArray) || tradeArray.length < 5) {
+      console.warn(`[${this.id}] Invalid book trade array format:`, tradeArray)
+      return null
+    }
+
+    const [price, amount, direction, timestamp, implied_taker] = tradeArray
+
+    return {
+      exchange: this.id,
+      pair: market,
+      timestamp: parseFloat(timestamp) * 1000, // Convert to milliseconds
+      price: parseFloat(price),
+      size: parseFloat(amount), // Use amount as size
+      side: direction === 'buy' ? 'buy' : 'sell',
+      instrument_name: market, // Set instrument_name to the pair since it's not provided
+      implied_taker: Boolean(implied_taker),
+      source: 'book' // Mark this as book trade data
+    }
+  }
+
+
 
 
 

@@ -43,6 +43,7 @@ class Aggregator {
       exchange.on('subscribed', this.onSubscribed.bind(this, exchange.id))
       exchange.on('unsubscribed', this.onUnsubscribed.bind(this, exchange.id))
       exchange.on('error', this.onError.bind(this, exchange.id))
+      exchange.on('ticker', this.onTicker.bind(this, exchange.id))
     }
   }
 
@@ -609,6 +610,24 @@ class Aggregator {
         url: api ? api.url : null
       }
     })
+  }
+
+  onTicker(exchangeId, data) {
+    const marketKey = data.market
+
+    if (!this.connections[marketKey]) {
+      return
+    }
+
+    const ticker = data.ticker
+    this.tickers[marketKey].price = ticker.price
+    this.tickers[marketKey].volume = ticker.volume
+    this.tickers[marketKey].volumeDelta = ticker.volumeDelta || 0
+    this.tickers[marketKey].updated = true
+
+    if (this.tickers[marketKey].initialPrice === null && ticker.price) {
+      this.emitInitialPrice(marketKey, ticker.price)
+    }
   }
 
   /**
