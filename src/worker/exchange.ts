@@ -3,7 +3,7 @@ import { EventEmitter } from 'eventemitter3'
 import { dispatchAsync } from './helpers/com'
 import { randomString, sleep } from './helpers/utils'
 import settings from './settings'
-interface Api extends WebSocket {
+export interface Api extends WebSocket {
   _id: string
   _pending: string[]
   _connected: string[]

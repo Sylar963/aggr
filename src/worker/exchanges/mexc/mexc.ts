@@ -1,4 +1,4 @@
-import Exchange from '../../exchange'
+import Exchange, { Api } from '../../exchange'
 import { handleFuturesMessage } from './mexc.futures'
 import {
   decodeMexcProtobuf,
@@ -62,7 +62,7 @@ export default class extends Exchange {
    * @param {WebSocket} api
    * @param {string} pair
    */
-  async subscribe(api: WebSocket, pair: string) {
+  async subscribe(api: Api, pair: string) {
     if (!(await super.subscribe(api, pair))) {
       return
     }
@@ -102,7 +102,7 @@ export default class extends Exchange {
    * @param {WebSocket} api
    * @param {string} pair
    */
-  async unsubscribe(api: WebSocket, pair: string) {
+  async unsubscribe(api: Api, pair: string) {
     if (!(await super.unsubscribe(api, pair))) {
       return
     }
@@ -184,7 +184,7 @@ export default class extends Exchange {
     )
   }
 
-  handleProtobufMessage(arrayBuffer: ArrayBuffer, api: any) {
+  handleProtobufMessage(arrayBuffer: ArrayBuffer, api: Api) {
     try {
       const message = decodeMexcProtobuf(arrayBuffer)
       if (!message) {
