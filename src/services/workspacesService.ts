@@ -288,17 +288,35 @@ class WorkspacesService {
     let urlWorkspaceId: string
     let urlPairs: string
     let workspace: Workspace
+    let sharedUrl = false
 
     if (this.urlStrategy === 'hash') {
       urlWorkspaceId = location.hash.substring(1)
     } else {
       // eslint-disable-next-line @typescript-eslint/no-extra-semi
-      ;[, urlWorkspaceId, urlPairs] = decodeURIComponent(
-        location.pathname
-      ).split('/')
+      const pathParts = decodeURIComponent(location.pathname).split('/')
+
+      if (pathParts[1] === 'w') {
+        sharedUrl = true
+        urlWorkspaceId = pathParts[2]
+        urlPairs = pathParts[3]
+      } else {
+        ;[, urlWorkspaceId, urlPairs] = pathParts
+      }
     }
 
-    if (urlWorkspaceId) {
+    if (sharedUrl && urlWorkspaceId) {
+      workspace = await this.getServerWorkspace(urlWorkspaceId)
+
+      if (workspace && !(await this.getWorkspace(urlWorkspaceId))) {
+        workspace.id = urlWorkspaceId
+        workspace.createdAt = Date.now()
+        workspace.updatedAt = null
+        await this.db.add('workspaces', workspace)
+      }
+    }
+
+    if (!workspace && urlWorkspaceId) {
       // try get workspace from id in the url
       workspace = await this.getWorkspace(urlWorkspaceId)
     }
@@ -336,6 +354,58 @@ class WorkspacesService {
     }
 
     return workspace
+  }
+
+  getWorkspaceApiBase() {
+    return (import.meta.env.VITE_APP_WORKSPACES_API_URL || '').replace(/\/$/, '')
+  }
+
+  async getServerWorkspace(id: string): Promise<Workspace> {
+    try {
+      const response = await fetch(
+        `${this.getWorkspaceApiBase()}/api/workspaces/${encodeURIComponent(id)}`
+      )
+
+      if (!response.ok) {
+        return
+      }
+
+      const data = await response.json()
+      return data.workspace
+    } catch (error) {
+      console.error('Failed to fetch server workspace:', error)
+    }
+  }
+
+  async shareWorkspace(id?: string | Workspace): Promise<string> {
+    const workspace = await this.getWorkspace(id)
+
+    if (!workspace) {
+      throw new Error('Workspace not found')
+    }
+
+    const payload: Workspace = JSON.parse(JSON.stringify(workspace))
+
+    if (payload.states && payload.states.panes) {
+      delete (payload.states.panes as PanesState).marketsListeners
+    }
+
+    const response = await fetch(`${this.getWorkspaceApiBase()}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: payload,
+        name: payload.name
+      })
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to share workspace')
+    }
+
+    return data.url
   }
 
   async setCurrentWorkspace(workspace: Workspace) {

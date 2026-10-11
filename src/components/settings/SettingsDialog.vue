@@ -67,6 +67,15 @@
             <i class="icon-download"></i>
             <span>Download</span>
           </button>
+          <button
+            type="button"
+            class="dropdown-item"
+            :disabled="sharingWorkspaceId === workspaceDropdownId"
+            @click="shareWorkspace(workspaceDropdownId)"
+          >
+            <i class="icon-external-link-square-alt"></i>
+            <span>{{ sharingWorkspaceId === workspaceDropdownId ? 'Sharing...' : 'Share link' }}</span>
+          </button>
           <div class="dropdown-divider"></div>
           <button
             type="button"
@@ -427,7 +436,8 @@ export default {
       workspaces: [],
       workspaceDropdownId: null,
       workspaceDropdownTrigger: null,
-      fetchingWords: false
+      fetchingWords: false,
+      sharingWorkspaceId: null
     }
   },
   computed: {
@@ -560,6 +570,33 @@ export default {
 
     async exportWorkspace(id = this.workspaceDropdownId) {
       workspacesService.downloadWorkspace(id)
+    },
+
+    async shareWorkspace(id = this.workspaceDropdownId) {
+      this.sharingWorkspaceId = id
+
+      try {
+        const url = await workspacesService.shareWorkspace(id)
+
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(url)
+        }
+
+        this.$store.dispatch('app/showNotice', {
+          title: navigator.clipboard
+            ? 'Share link copied to clipboard'
+            : `Share link: ${url}`,
+          timeout: 10000
+        })
+      } catch (error) {
+        this.$store.dispatch('app/showNotice', {
+          title: error.message || 'Failed to share workspace',
+          type: 'error',
+          timeout: 10000
+        })
+      } finally {
+        this.sharingWorkspaceId = null
+      }
     },
 
     async duplicateWorkspace(id = this.workspaceDropdownId) {
