@@ -17,7 +17,7 @@ if(process.platform === "win32"){
 
 const app = express()
 const PORT = process.env.DIST_SERVER_PORT || process.env.PORT || 8060
-const HOST = '0.0.0.0'
+const HOST = process.env.DIST_SERVER_HOST || '0.0.0.0'
 const DATA_FILE = process.env.WORKSPACES_DB || process.env.DATABASE_URL || path.join(__dirname, '..', 'data', 'workspaces.json')
 const IP_SALT = process.env.IP_SALT || 'aggr-workspace-dev-salt'
 const SHARE_BASE_URL = process.env.SHARE_BASE_URL || process.env.API_BASE || ''
@@ -269,7 +269,7 @@ app.disable('x-powered-by')
 app.set('trust proxy', true)
 app.use(securityHeaders)
 app.use(corsHeaders)
-app.use(createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 }))
+app.use('/api', createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 }))
 app.use(express.json({ limit: MAX_WORKSPACE_SIZE + 1024 }))
 
 const createLimiter = createRateLimiter({

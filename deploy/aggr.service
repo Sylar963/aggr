@@ -1,0 +1,41 @@
+[Unit]
+Description=Aggr charts (dist server + workspace share API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=teal
+Group=teal
+WorkingDirectory=/home/aladhi/aladhi/aggr
+EnvironmentFile=/etc/aggr/aggr.env
+ExecStart=/home/teal/.local/bin/node dist-server/index.mjs
+Restart=always
+RestartSec=3
+
+# Workspace database lives in /var/lib/aggr (created by systemd, owned by User)
+StateDirectory=aggr
+StateDirectoryMode=0750
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

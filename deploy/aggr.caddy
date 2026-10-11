@@ -1,0 +1,12 @@
+
+# Aggr charts - local only, open https://aggr.localhost
+aggr.localhost {
+	tls internal
+
+	# Refuse anything not coming from this machine
+	@outside not remote_ip 127.0.0.1 ::1
+	abort @outside
+
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8060
+}
