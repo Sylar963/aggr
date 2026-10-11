@@ -1,12 +1,12 @@
-
-# Aggr charts - local only, open https://aggr.localhost
-aggr.localhost {
-	tls internal
-
-	# Refuse anything not coming from this machine
-	@outside not remote_ip 127.0.0.1 ::1
-	abort @outside
-
+# BEGIN aggr (managed by aggr/deploy/install.sh)
+charts.oggregator.xyz {
 	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
 	reverse_proxy 127.0.0.1:8060
 }
+# END aggr

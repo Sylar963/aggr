@@ -33,7 +33,15 @@ let workspaceDb = null
 let writeQueue = Promise.resolve()
 
 function getLocalIP() {
-  const interfaces = os.networkInterfaces()
+  let interfaces
+
+  try {
+    interfaces = os.networkInterfaces()
+  } catch (error) {
+    // sandboxed (e.g. systemd RestrictAddressFamilies without AF_NETLINK)
+    return 'localhost'
+  }
+
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
@@ -462,7 +470,7 @@ setInterval(() => {
 }, 24 * 60 * 60 * 1000).unref()
 
 app.listen(PORT, HOST, () => {
-  const localIP = getLocalIP()
+  const localIP = HOST === '0.0.0.0' ? getLocalIP() : HOST
   console.log(`aggr dist server started on http://${localIP}:${PORT}`)
   console.log(`workspace share API using ${DATA_FILE}`)
 })
