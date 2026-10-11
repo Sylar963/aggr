@@ -147,6 +147,38 @@ export async function uploadResource(item) {
   }
 }
 
+/**
+ * resolve library resource url
+ * absolute paths (eg. /library/...) are served by this app (local library), others by the community library
+ * @param path
+ * @returns url
+ */
+export function getLibraryUrl(path: string) {
+  if (/^(https?:)?\//.test(path)) {
+    return path
+  }
+
+  return `${import.meta.env.VITE_APP_LIB_URL}${path}`
+}
+
+/**
+ * fetch indicators bundled with this app (public/library/indicators.json)
+ * @returns indicators flagged as local, with paths resolved against the app base url
+ */
+export async function fetchLocalIndicators() {
+  const base = import.meta.env.BASE_URL
+  const indicators = await (
+    await fetch(`${base}library/indicators.json`)
+  ).json()
+
+  return indicators.map(indicator => ({
+    ...indicator,
+    local: true,
+    jsonPath: `${base}${indicator.jsonPath}`,
+    imagePath: indicator.imagePath ? `${base}${indicator.imagePath}` : null
+  }))
+}
+
 export async function fetchIndicator(
   jsonPath: string,
   imagePath: string,
@@ -167,12 +199,11 @@ export async function fetchIndicator(
       )
     ).blob()
   } else {
-    indicator = await (
-      await fetch(`${import.meta.env.VITE_APP_LIB_URL}${jsonPath}`)
-    ).json()
-    preview = await (
-      await fetch(`${import.meta.env.VITE_APP_LIB_URL}${imagePath}`)
-    ).blob()
+    indicator = await (await fetch(getLibraryUrl(jsonPath))).json()
+
+    if (imagePath) {
+      preview = await (await fetch(getLibraryUrl(imagePath))).blob()
+    }
   }
 
   if (!indicator.data) {

@@ -21,6 +21,7 @@
 
 <script lang="ts">
 import Btn from '@/components/framework/Btn.vue'
+import { getLibraryUrl } from '@/components/library/helpers'
 
 export default {
   props: {
@@ -60,7 +61,7 @@ export default {
       }
 
       if (this.path) {
-        return `${import.meta.env.VITE_APP_LIB_URL}${this.path}`
+        return getLibraryUrl(this.path)
       }
 
       return null

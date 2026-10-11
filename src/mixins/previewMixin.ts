@@ -2,6 +2,7 @@ import Vue from 'vue'
 import Component from 'vue-class-component'
 import { getEventCords } from '@/utils/helpers'
 import { isTouchSupported } from '@/utils/touchevent'
+import { getLibraryUrl } from '@/components/library/helpers'
 
 const PREVIEW_SIZE = {
   originalWidth: 500,
@@ -51,15 +52,15 @@ export default class PreviewMixin extends Vue {
 
     if (!json.preview) {
       if (json.imagePath) {
-        json.preview = await fetch(
-          `${import.meta.env.VITE_APP_LIB_URL}${json.imagePath}`
-        ).then(response => {
-          if (!response.ok) {
-            json.imagePath = null
-            throw new Error('Network response was not ok')
+        json.preview = await fetch(getLibraryUrl(json.imagePath)).then(
+          response => {
+            if (!response.ok) {
+              json.imagePath = null
+              throw new Error('Network response was not ok')
+            }
+            return response.blob()
           }
-          return response.blob()
-        })
+        )
       }
 
       if (!json.preview) {

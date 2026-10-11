@@ -80,6 +80,7 @@
           {{
             (indicator.displayName || indicator.name).replace(/\{[\w_]+\}/g, '')
           }}
+          <span v-if="indicator.local" class="badge -outline ml4">custom</span>
         </td>
         <td class="table-input table-ellipsis">
           <span class="text-muted">{{ indicator.description }}</span>

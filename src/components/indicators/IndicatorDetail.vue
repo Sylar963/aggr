@@ -93,6 +93,7 @@
               >Install</Btn
             >
             <Btn
+              v-if="!indicator.local"
               @click="toggleVersionsDropdown"
               :loading="isFetchingVersions"
               :disabled="isInstalling || isFetchingVersions"
@@ -230,6 +231,10 @@ export default {
       return null
     },
     authorUrl() {
+      if (this.indicator.local) {
+        return null
+      }
+
       return `${import.meta.env.VITE_APP_LIB_REPO_URL}/tree/main/indicators/${
         this.indicator.author
       }`

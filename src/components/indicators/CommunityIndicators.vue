@@ -27,6 +27,7 @@ import Loader from '@/components/framework/Loader.vue'
 import SearchBar from '@/components/framework/SearchBar.vue'
 import IndicatorTable from '@/components/indicators/IndicatorTable.vue'
 import LibraryIncentive from '@/components/library/LibraryIncentive.vue'
+import { fetchLocalIndicators } from '@/components/library/helpers'
 let CACHE = []
 
 export default {
@@ -54,21 +55,34 @@ export default {
     async getIndicators() {
       this.isLoading = true
 
-      try {
-        CACHE = await (
-          await fetch(`${import.meta.env.VITE_APP_LIB_URL}library/indicators`)
-        ).json()
+      const [local, community] = await Promise.allSettled([
+        fetchLocalIndicators(),
+        fetch(`${import.meta.env.VITE_APP_LIB_URL}library/indicators`).then(
+          response => response.json()
+        )
+      ])
 
-        this.indicators = CACHE
-      } catch (error) {
-        console.error(error)
+      for (const result of [local, community]) {
+        if (result.status === 'rejected') {
+          console.error(result.reason)
+        }
+      }
+
+      if (local.status === 'rejected' && community.status === 'rejected') {
         this.$store.dispatch('app/showNotice', {
           type: 'error',
           title: 'Failed to fetch indicators'
         })
-      } finally {
-        this.isLoading = false
+      } else {
+        CACHE = [
+          ...(local.status === 'fulfilled' ? local.value : []),
+          ...(community.status === 'fulfilled' ? community.value : [])
+        ]
+
+        this.indicators = CACHE
       }
+
+      this.isLoading = false
     }
   }
 }

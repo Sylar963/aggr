@@ -1,0 +1,12 @@
+[
+  {
+    "id": "mean-reversion-channel",
+    "jsonPath": "library/indicators/custom/mean-reversion-channel.json",
+    "imagePath": "library/indicators/custom/mean-reversion-channel.png",
+    "author": "Aladhi",
+    "name": "Mean Reversion Channel",
+    "description": "MRC: SuperSmoother mean with inner/outer channels and overbought/oversold zones",
+    "createdAt": 1791676800000,
+    "updatedAt": 1791676800000
+  }
+]
