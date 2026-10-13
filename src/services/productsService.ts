@@ -17,7 +17,7 @@ const DASH_SPOT_REGEX = /-SPOT$/
 const SWAP_OR_PERP_REGEX = /(-|_)swap$|(-|_|:)perp/i
 const SWAP_SUFFIX_REGEX = /-swap$/i
 const TWO_DIGITS_REGEX = /\d{2}/
-const KRAKEN_FUTURES_REGEX = /(PI|FI|PF)_/
+const KRAKEN_FUTURES_REGEX = /(PI|FI|PF|FF)_/
 const HUOBI_SUFFIXES_REGEX = /_CW|_CQ|_NW|_NQ/i
 const DERIBIT_PERP_REGEX = /_(\w+)-PERPETUAL/i
 const KUCOIN_SUFFIX_REGEX = /M$/
@@ -44,7 +44,8 @@ const stablecoins = [
   'USDK',
   'USDP',
   'FDUSD',
-  'UST'
+  'UST',
+  'USD1'
 ]
 
 const normalStablecoinLookup = /^U/
@@ -59,8 +60,9 @@ const reverseStablecoins = stablecoins.filter(
 
 const currencies = ['EUR', 'USD', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNH']
 
+// trailing letter or 1: USDT, USDC, USD1 -> USD
 const genericQuoteCurrencyLookup = new RegExp(
-  `[a-z]*(${currencies.join('|')})[a-z]?$`,
+  `[a-z]*(${currencies.join('|')})(?:[a-z]|1)?$`,
   'i'
 )
 const reverseStablecoinPairLookup = new RegExp(
@@ -68,23 +70,63 @@ const reverseStablecoinPairLookup = new RegExp(
   'i'
 )
 const standardCurrencyPairLookup = new RegExp(
-  `(\\w{3})?(${currencies.join('|')})[a-z]?$`,
+  `(\\w{3})?(${currencies.join('|')})(?:[a-z]|1)?$`,
   'i'
 )
 const currencyPairLookup = new RegExp(
-  `^([A-Z0-9]{2,})[-/:]?(${currencies.join('|')})$`
+  `^([A-Z0-9]+)[-/:]?(${currencies.join('|')})$`
 )
 
-// use 2+ caracters symbol for normal stablecoins, and 3+ for reversed
+// one letter bases are fine for normal stablecoins (SUSDT -> S/USDT), 3+ for reversed
 // not infallible but avoids coin with symbol finishing with T or B to be labeled as TUSD or BUSD quoted markets
 const stablecoinPairLookup = new RegExp(
-  `^([A-Z0-9]{2,})[-/:_]?(${normalStablecoins.join(
+  `^([A-Z0-9]+)[-/:_]?(${normalStablecoins.join(
     '|'
   )})$|^([A-Z0-9]{3,})[-/:_]?(${reverseStablecoins.join('|')})$`
 )
 const simplePairLookup = new RegExp(`^([A-Z0-9]{2,})[-/_]?([A-Z0-9]{3,})$`)
+// one letter base only when delimited (A_BTC), adau is ADA/U not A/DAU
+const delimitedPairLookup = new RegExp(`^([A-Z0-9]+)[-/_]([A-Z][A-Z0-9]{2,})$`)
 
 const promisesOfProducts = {}
+
+// same endpoint requested by multiple exchanges (tradfi references)
+const REQUESTS_CACHE_DURATION = 1000 * 60 * 2
+const requestsCache: {
+  [key: string]: { timestamp: number; promise: Promise<any> }
+} = {}
+
+function fetchJson(url: string, method: string, body?: string) {
+  const key = method + url + (body || '')
+  const now = Date.now()
+
+  if (
+    requestsCache[key] &&
+    now - requestsCache[key].timestamp < REQUESTS_CACHE_DURATION
+  ) {
+    return requestsCache[key].promise
+  }
+
+  const headers: Record<string, string> = {}
+
+  if (method === 'POST' && body) {
+    headers['Content-Type'] = 'application/json'
+  }
+
+  const promise = fetch(url, {
+    headers,
+    method,
+    body
+  }).then(response => response.json())
+
+  requestsCache[key] = { timestamp: now, promise }
+
+  promise.catch(() => {
+    delete requestsCache[key]
+  })
+
+  return promise
+}
 
 export const indexedProducts = {}
 
@@ -210,6 +252,7 @@ async function fetchExchangeProducts(
   )
 
   let data = []
+  let failed = false
 
   for (const instruction of endpoints) {
     let endpoint: {
@@ -217,6 +260,7 @@ async function fetchExchangeProducts(
       method: string
       data?: string
       proxy?: boolean
+      optional?: boolean
     }
 
     if (typeof instruction === 'string') {
@@ -225,7 +269,7 @@ async function fetchExchangeProducts(
         method: 'GET'
       }
     } else {
-      endpoint = instruction
+      endpoint = { ...instruction }
     }
 
     if (
@@ -237,27 +281,25 @@ async function fetchExchangeProducts(
     }
 
     try {
-      const headers: Record<string, string> = {}
-
-      if (endpoint.method === 'POST' && endpoint.data) {
-        headers['Content-Type'] = 'application/json'
-      }
-
-      const json = await fetch(endpoint.url, {
-        headers,
-        method: endpoint.method,
-        body: endpoint.data
-      }).then(response => response.json())
-
-      data[endpoints.indexOf(instruction)] = json
+      data[endpoints.indexOf(instruction)] = await fetchJson(
+        endpoint.url,
+        endpoint.method,
+        endpoint.data
+      )
     } catch (error) {
       console.error(`[${exchangeId}] couldn't parse non-json products`, error)
 
       data[endpoints.indexOf(instruction)] = null
+
+      if (endpoint.optional) {
+        continue
+      }
+
+      failed = true
     }
   }
 
-  if (data.indexOf(null) !== -1) {
+  if (failed) {
     // today if one of the endpoint fail, consider they all failed
     // todo => accept this set of products without saving
     data = null
@@ -474,6 +516,10 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
     match = localSymbol.match(stablecoinPairLookup)
 
     if (!match) {
+      match = localSymbol.match(delimitedPairLookup)
+    }
+
+    if (!match) {
       match = localSymbolAlpha.match(simplePairLookup)
     }
 
@@ -654,7 +700,11 @@ export async function resolvePairs(pairs: string[]) {
         continue
       }
 
-      if (historicalOnly && historicalMarkets.indexOf(product.id) === -1) {
+      if (
+        historicalOnly &&
+        !(searchTradfi && product.tradfi) &&
+        historicalMarkets.indexOf(product.id) === -1
+      ) {
         continue
       }
 

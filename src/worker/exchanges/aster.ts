@@ -1,11 +1,20 @@
 import Exchange from '../exchange'
-import { ASTER_TRADFI_SYMBOLS } from '@/utils/tradfi'
+import {
+  buildTradfiReference,
+  getTradfiBase,
+  matchTradfiReference,
+  TRADFI_REFERENCE_ENDPOINTS
+} from '@/utils/tradfi'
 
 export default class ASTER extends Exchange {
   id = 'ASTER'
 
   protected endpoints = {
-    PRODUCTS: ['https://fapi.asterdex.com/fapi/v1/exchangeInfo']
+    PRODUCTS: [
+      'https://fapi.asterdex.com/fapi/v1/exchangeInfo',
+      'https://fapi.asterdex.com/fapi/v1/premiumIndex',
+      ...TRADFI_REFERENCE_ENDPOINTS
+    ]
   }
 
   // Binance-style fstream clone
@@ -25,17 +34,33 @@ export default class ASTER extends Exchange {
     return true
   }
 
-  formatProducts(response) {
+  formatProducts([info, premiumIndex, ...references]) {
     const products = []
     const tradfi = []
 
-    if (response && Array.isArray(response.symbols)) {
-      for (const s of response.symbols) {
+    // aster doesn't flag stocks & commodities, compare with exchanges that do
+    const reference = buildTradfiReference(references)
+    const prices = (Array.isArray(premiumIndex) ? premiumIndex : []).reduce(
+      (acc, index) => {
+        acc[index.symbol] = +index.markPrice
+        return acc
+      },
+      {}
+    )
+
+    if (info && Array.isArray(info.symbols)) {
+      for (const s of info.symbols) {
         if (s.contractType === 'PERPETUAL' && s.status === 'TRADING') {
           products.push(s.symbol) // e.g. 'BTCUSDT'
 
-          // aster doesn't flag stocks & commodities
-          if (ASTER_TRADFI_SYMBOLS.has(s.symbol)) {
+          if (
+            matchTradfiReference(
+              reference,
+              s.symbol,
+              getTradfiBase(s.baseAsset),
+              prices[s.symbol]
+            )
+          ) {
             tradfi.push(s.symbol)
           }
         }

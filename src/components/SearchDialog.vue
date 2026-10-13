@@ -496,6 +496,7 @@ export default {
       'FDUSD',
       'UST',
       'USDC',
+      'USD1',
       'USDD',
       'TUSD',
       'ETH',
@@ -657,7 +658,12 @@ export default {
       const historicalMarkets = this.historicalMarkets
 
       return flattenedProducts.filter(a => {
-        if (hasHistorical && historicalMarkets.indexOf(a.id) === -1) {
+        // no tradfi market has history, don't hide them all when asked for
+        if (
+          hasHistorical &&
+          !(hasTradfi && a.tradfi) &&
+          historicalMarkets.indexOf(a.id) === -1
+        ) {
           return false
         }
 

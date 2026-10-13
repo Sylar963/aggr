@@ -1,5 +1,13 @@
 import Exchange from '../exchange'
-import { LIGHTER_TRADFI_SYMBOLS } from '@/utils/tradfi'
+import {
+  buildTradfiReference,
+  getTradfiBase,
+  matchTradfiReference,
+  TRADFI_REFERENCE_ENDPOINTS
+} from '@/utils/tradfi'
+
+// HYUNDAIUSD -> HYUNDAI, but EURUSD stays a pair
+const USD_SUFFIX_REGEX = /^([A-Z0-9]{4,})USD$/
 
 export default class LIGHTER extends Exchange {
   id = 'LIGHTER'
@@ -12,7 +20,10 @@ export default class LIGHTER extends Exchange {
   private pairs: { [marketId: string]: string }
 
   protected endpoints = {
-    PRODUCTS: 'https://mainnet.zklighter.elliot.ai/api/v1/orderBooks'
+    PRODUCTS: [
+      'https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails',
+      ...TRADFI_REFERENCE_ENDPOINTS
+    ]
   }
 
   async getUrl() {
@@ -27,13 +38,16 @@ export default class LIGHTER extends Exchange {
     return true
   }
 
-  formatProducts(response) {
+  formatProducts([details, ...references]) {
     const products = []
     const marketIds = {}
     const pairs = {}
     const tradfi = []
 
-    for (const market of response.order_books) {
+    // lighter doesn't flag stocks, commodities & fx, compare with exchanges that do
+    const reference = buildTradfiReference(references)
+
+    for (const market of details.order_book_details) {
       if (market.market_type !== 'perp' || market.status !== 'active') {
         continue
       }
@@ -42,8 +56,16 @@ export default class LIGHTER extends Exchange {
       marketIds[market.symbol] = market.market_id
       pairs[market.market_id] = market.symbol
 
-      // lighter doesn't flag stocks, commodities & fx
-      if (LIGHTER_TRADFI_SYMBOLS.has(market.symbol)) {
+      const base = getTradfiBase(market.symbol.replace(USD_SUFFIX_REGEX, '$1'))
+
+      if (
+        matchTradfiReference(
+          reference,
+          market.symbol,
+          base,
+          +market.last_trade_price || +market.mark_price
+        )
+      ) {
         tradfi.push(market.symbol)
       }
     }

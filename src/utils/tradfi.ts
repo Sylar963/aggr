@@ -3,25 +3,13 @@
  *
  * Exchanges flag those markets in their products endpoint when they can
  * (binance contractType, bybit symbolType, okx instCategory, bitget isRwa).
- * The lists below cover exchanges that don't (aster, lighter, hyperliquid HIP-3).
+ * Exchanges that don't (aster, lighter) are matched against those flags, by
+ * name and price, see TRADFI_REFERENCE_ENDPOINTS. HIP-3 dexes are tradfi by design.
  *
  * Aliases rename tradfi bases so the same asset share one pair across exchanges
  * (xyz:GOLD, XAUUSDT, XAU-USDT-SWAP -> XAUUSD). Only aliases with matching
  * price scale belong here, SPX is the SPX6900 memecoin on most exchanges.
  */
-
-// raw symbols, verified against flagged exchanges prices
-export const ASTER_TRADFI_SYMBOLS = new Set(
-  'AAOIUSDT AAPLUSDT ADBEUSDT AGPUUSDT AMATUSDT AMDUSDT AMZNUSDT ANTHROPICUSDT ARMUSDT ASMLUSDT ASTSUSDT AVGOUSDT AXTIUSDT BABAUSDT BBXUSDT BEUSDT BMNRUSDT BRKBUSDT BXUSDT BZUSDT CBRSUSDT CLUSDT COHRUSDT COINUSDT COSTUSDT CRCLUSDT CRDOUSDT CRMUSDT CRWDUSDT CRWVUSDT CSCOUSDT CXMTUSDT DELLUSDT DISUSDT DKNGUSDT DRAMUSDT EBAYUSDT EWJUSDT EWTUSDT EWYUSDT EWZUSDT FLNCUSDT FUTUUSDT GLWUSDT GMEUSDT GOOGLUSDT HDUSDT HIMSUSDT HOODUSDT HPEUSDT HYUNDAIUSDT IBMUSDT INTCUSDT IRENUSDT IWMUSDT JPMUSDT KORUUSDT KSTRUSDT KUAISHOUUSDT LITEUSDT LLYUSDT LYTEUSDT MEITUANUSDT METAUSDT MINIMAXUSDT MRNAUSDT MRVLUSDT MSFTUSDT MSTRUSDT MUUSDT MUUUSDT NATGASUSDT NBISUSDT NFLXUSDT NOKUSDT NOWUSDT NVDAUSDT NVOUSDT ONDSUSDT OPENAIUSDT ORCLUSDT PAXGUSDT PAYPUSDT PLTRUSDT POPMARTUSDT QCOMUSDT QNTXUSDT QQQUSDT RIVNUSDT RKLBUSDT SAMSUNGUSDT SKHYNIXUSDT SKHYUSDT SNDKUSDT SNXXUSDT SOXLUSDT SPCXUSDT SPYUSDT STRCUSDT STXXUSDT TENCENTUSDT TQQQUSDT TSLAUSDT TSMUSDT UBERUSDT UNITREEUSDT URNMUSDT USARUSDT UVXYUSDT VUSDT WDCUSDT WMTUSDT XAGUSDT XAUUSDT XCUUSDT XIAOMIUSDT XLEUSDT XPDUSDT XPTUSDT ZHIPUUSDT ZMUSDT EURUSD GBPUSD JPYUSD'.split(
-    ' '
-  )
-)
-
-export const LIGHTER_TRADFI_SYMBOLS = new Set(
-  'AAOI AAPL AMD AMZN ANTHROPIC ARM ASML AUDUSD AVGO AXTI BABA BB BE BMNR BOT BRENTOIL BYD CBRS COIN CRCL CRWV CXMT DELL DRAM EURUSD EWY GBPUSD GEV GME GOOGL H100 HOOD HYUNDAIUSD IBM INTC IWM KIOXIA KORU LITE META MINIMAX MRNA MRVL MSFT MSTR MU NATGAS NBIS NOK NOW NVDA NZDUSD OPENAI ORCL OURA PAXG PLTR POPMART QCOM QQQ RKLB SAMSUNGUSD SHEIN SKHY SKHYNIXUSD SMIC SNDK SOXL SOXS SPCX SPY STRC TENCENT TSLA TSM TTWO UNITREE US100 US10Y US500 USDCAD USDCHF USDHKD USDJPY USDKRW WDC WEN WTI XAG XAU XCU XIAOMI XPD XPT ZHIPU'.split(
-    ' '
-  )
-)
 
 // HIP-3 dexes are tradfi unless listed here
 export const HIP3_CRYPTO_DEXES = new Set(['hyna'])
@@ -78,6 +66,12 @@ const TRADFI_MARKET_ALIASES = {
 }
 
 const FX_PAIR_REGEX = /^(EUR|GBP|AUD|NZD|USD|CHF|CAD|JPY)([A-Z]{3})$/
+const FX_CURRENCIES =
+  'USD|EUR|GBP|JPY|AUD|NZD|CAD|CHF|HKD|KRW|CNH|CNY|SGD|BRL|MXN|TRY|INR|ZAR'
+const FX_SYMBOL_REGEX = new RegExp(`^(${FX_CURRENCIES})(${FX_CURRENCIES})$`)
+
+// max distance to the flagged exchanges median price (crypto with stock ticker: BB, QNT, ON)
+const REFERENCE_PRICE_TOLERANCE = 0.25
 
 export function getTradfiMarketAlias(exchangeId: string, symbol: string) {
   return TRADFI_MARKET_ALIASES[exchangeId + ':' + symbol]
@@ -128,4 +122,152 @@ const TRADFI_SEARCH_KEYWORDS = Object.keys(TRADFI_BASE_ALIASES).reduce(
 
 export function getTradfiSearchKeywords(base: string): string[] {
   return TRADFI_SEARCH_KEYWORDS[base] || []
+}
+
+export function getTradfiBase(base: string) {
+  return TRADFI_BASE_ALIASES[base] || base
+}
+
+/**
+ * Flagged exchanges' tradfi markets + prices, to recognize tradfi markets
+ * on exchanges without flags. Optional: products still load if they fail.
+ */
+export const TRADFI_REFERENCE_ENDPOINTS = [
+  'https://fapi.binance.com/fapi/v1/exchangeInfo',
+  'https://fapi.binance.com/fapi/v1/ticker/price',
+  'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000',
+  'https://api.bybit.com/v5/market/tickers?category=linear',
+  'https://www.okx.com/api/v5/public/instruments?instType=SWAP',
+  'https://www.okx.com/api/v5/market/tickers?instType=SWAP',
+  'https://api.bitget.com/api/v3/market/instruments?category=USDT-FUTURES',
+  'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES'
+].map(url => ({ url, method: 'GET', optional: true }))
+
+export type TradfiReference = { [base: string]: number }
+
+/**
+ * @param responses responses of TRADFI_REFERENCE_ENDPOINTS (null if failed)
+ * @returns canonical base -> median price across flagged exchanges
+ */
+export function buildTradfiReference(responses: any[]): TradfiReference {
+  const [
+    binanceInfo,
+    binancePrices,
+    bybitInfo,
+    bybitPrices,
+    okxInfo,
+    okxPrices,
+    bitgetInfo,
+    bitgetPrices
+  ] = responses
+  const prices: { [base: string]: number[] } = {}
+
+  const add = (base: string, price: number) => {
+    if (!base || !(price > 0)) {
+      return
+    }
+
+    base = getTradfiBase(base)
+
+    if (!prices[base]) {
+      prices[base] = []
+    }
+
+    prices[base].push(price)
+  }
+
+  // geo blocked / errored endpoints may answer with an object
+  const index = (list: any[], key: string, value: string) =>
+    (Array.isArray(list) ? list : []).reduce((acc, item) => {
+      acc[item[key]] = +item[value]
+      return acc
+    }, {})
+
+  if (binanceInfo && binancePrices) {
+    const last = index(binancePrices, 'symbol', 'price')
+
+    for (const product of Array.isArray(binanceInfo.symbols)
+      ? binanceInfo.symbols
+      : []) {
+      if (product.contractType === 'TRADIFI_PERPETUAL') {
+        add(product.baseAsset, last[product.symbol])
+      }
+    }
+  }
+
+  if (bybitInfo && bybitPrices) {
+    const last = index(
+      bybitPrices.result && bybitPrices.result.list,
+      'symbol',
+      'lastPrice'
+    )
+
+    const products = bybitInfo.result && bybitInfo.result.list
+
+    for (const product of Array.isArray(products) ? products : []) {
+      if (/^(stock|ETF|commodity|forex|index)$/.test(product.symbolType)) {
+        add(product.baseCoin, last[product.symbol])
+      }
+    }
+  }
+
+  if (okxInfo && okxPrices) {
+    const last = index(okxPrices.data, 'instId', 'last')
+
+    for (const product of Array.isArray(okxInfo.data) ? okxInfo.data : []) {
+      if (product.instCategory && product.instCategory !== '1') {
+        add(product.instId.split('-')[0], last[product.instId])
+      }
+    }
+  }
+
+  if (bitgetInfo && bitgetPrices) {
+    const last = index(bitgetPrices.data, 'symbol', 'lastPr')
+
+    for (const product of Array.isArray(bitgetInfo.data)
+      ? bitgetInfo.data
+      : []) {
+      if (product.isRwa === 'YES') {
+        add(product.baseCoin, last[product.symbol])
+      }
+    }
+  }
+
+  const reference: TradfiReference = {}
+
+  for (const base in prices) {
+    const sorted = prices[base].sort((a, b) => a - b)
+    reference[base] = sorted[Math.floor(sorted.length / 2)]
+  }
+
+  return reference
+}
+
+/**
+ * Is a market from an exchange without tradfi flags a tradfi market
+ * @param symbol raw symbol, FX pairs are matched on it (EURUSD, USDJPY)
+ * @param base canonical base (getTradfiBase)
+ * @param price current price, unchecked when unknown
+ */
+export function matchTradfiReference(
+  reference: TradfiReference,
+  symbol: string,
+  base: string,
+  price?: number
+) {
+  const fx = symbol.match(FX_SYMBOL_REGEX)
+
+  if (fx && fx[1] !== fx[2]) {
+    return true
+  }
+
+  if (!reference[base]) {
+    return false
+  }
+
+  if (!(price > 0)) {
+    return true
+  }
+
+  return Math.abs(price / reference[base] - 1) <= REFERENCE_PRICE_TOLERANCE
 }
