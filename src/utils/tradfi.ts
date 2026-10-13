@@ -131,17 +131,28 @@ export function getTradfiBase(base: string) {
 /**
  * Flagged exchanges' tradfi markets + prices, to recognize tradfi markets
  * on exchanges without flags. Optional: products still load if they fail.
+ * proxy: false for urls the production proxy doesn't allow (they send CORS
+ * headers), the others are the same requests as their exchange's products.
  */
 export const TRADFI_REFERENCE_ENDPOINTS = [
-  'https://fapi.binance.com/fapi/v1/exchangeInfo',
-  'https://fapi.binance.com/fapi/v1/ticker/price',
-  'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000',
-  'https://api.bybit.com/v5/market/tickers?category=linear',
-  'https://www.okx.com/api/v5/public/instruments?instType=SWAP',
-  'https://www.okx.com/api/v5/market/tickers?instType=SWAP',
-  'https://api.bitget.com/api/v3/market/instruments?category=USDT-FUTURES',
-  'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES'
-].map(url => ({ url, method: 'GET', optional: true }))
+  ['https://fapi.binance.com/fapi/v1/exchangeInfo', true],
+  ['https://fapi.binance.com/fapi/v1/ticker/price', false],
+  [
+    'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000',
+    false
+  ],
+  ['https://api.bybit.com/v5/market/tickers?category=linear', false],
+  ['https://www.okx.com/api/v5/public/instruments?instType=SWAP', true],
+  ['https://www.okx.com/api/v5/market/tickers?instType=SWAP', false],
+  [
+    'https://api.bitget.com/api/v3/market/instruments?category=USDT-FUTURES',
+    true
+  ],
+  [
+    'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES',
+    false
+  ]
+].map(([url, proxy]) => ({ url, method: 'GET', proxy, optional: true }))
 
 export type TradfiReference = { [base: string]: number }
 
@@ -247,7 +258,7 @@ export function buildTradfiReference(responses: any[]): TradfiReference {
  * Is a market from an exchange without tradfi flags a tradfi market
  * @param symbol raw symbol, FX pairs are matched on it (EURUSD, USDJPY)
  * @param base canonical base (getTradfiBase)
- * @param price current price, unchecked when unknown
+ * @param price current price, required (except for FX)
  */
 export function matchTradfiReference(
   reference: TradfiReference,
@@ -261,12 +272,9 @@ export function matchTradfiReference(
     return true
   }
 
-  if (!reference[base]) {
+  // unknown price can't rule out a coin with a stock ticker (BB, QNT)
+  if (!reference[base] || !(price > 0)) {
     return false
-  }
-
-  if (!(price > 0)) {
-    return true
   }
 
   return Math.abs(price / reference[base] - 1) <= REFERENCE_PRICE_TOLERANCE

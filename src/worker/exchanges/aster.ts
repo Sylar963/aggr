@@ -12,7 +12,13 @@ export default class ASTER extends Exchange {
   protected endpoints = {
     PRODUCTS: [
       'https://fapi.asterdex.com/fapi/v1/exchangeInfo',
-      'https://fapi.asterdex.com/fapi/v1/premiumIndex',
+      // prices for tradfi detection, not allowed by the production proxy
+      {
+        url: 'https://fapi.asterdex.com/fapi/v1/premiumIndex',
+        method: 'GET',
+        proxy: false,
+        optional: true
+      },
       ...TRADFI_REFERENCE_ENDPOINTS
     ]
   }
