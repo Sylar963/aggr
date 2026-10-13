@@ -568,24 +568,20 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
   }
 }
 
-export async function getApiSupportedMarkets() {
-  let products = import.meta.env.VITE_APP_API_SUPPORTED_PAIRS as
-    | string
-    | string[]
-  if (products && products.length) {
-    products = (products as string).split(',').map(market => market.trim())
-  } else {
-    products = []
-  }
+// markets served by an extra history server (VITE_APP_EXTRA_API_URLS) -> its url
+export const historicalMarketsSources: { [market: string]: string } = {}
 
-  if (!import.meta.env.VITE_APP_API_URL) {
-    return products
-  }
+const EXTRA_API_URLS = (import.meta.env.VITE_APP_EXTRA_API_URLS || '')
+  .split(',')
+  .map(url => url.trim())
+  .filter(url => url.length)
+  .map(url => (/\/$/.test(url) ? url : url + '/'))
 
+async function fetchApiProducts(url: string, cacheKey: string) {
   const now = Date.now()
 
   try {
-    const cache = JSON.parse(localStorage.getItem('API_SUPPORTED_PAIRS'))
+    const cache = JSON.parse(localStorage.getItem(cacheKey))
 
     if (!cache || !cache.products) {
       throw new Error('api supported pairs products cache is invalid')
@@ -605,16 +601,14 @@ export async function getApiSupportedMarkets() {
   }
 
   try {
-    const products = await fetch(getApiUrl('products')).then(response =>
-      response.json()
-    )
+    const products = await fetch(url).then(response => response.json())
 
     if (!products.length) {
       throw new Error('invalid supported markets list')
     }
 
     localStorage.setItem(
-      'API_SUPPORTED_PAIRS',
+      cacheKey,
       JSON.stringify({
         products,
         timestamp: now
@@ -624,6 +618,46 @@ export async function getApiSupportedMarkets() {
     return products
   } catch (error) {
     console.error(error)
+  }
+
+  return null
+}
+
+export async function getApiSupportedMarkets() {
+  let products = import.meta.env.VITE_APP_API_SUPPORTED_PAIRS as
+    | string
+    | string[]
+  if (products && products.length) {
+    products = (products as string).split(',').map(market => market.trim())
+  } else {
+    products = []
+  }
+
+  if (import.meta.env.VITE_APP_API_URL) {
+    products =
+      (await fetchApiProducts(getApiUrl('products'), 'API_SUPPORTED_PAIRS')) ||
+      products
+  }
+
+  // tradfi (or any other) markets recorded by another aggr-server
+  for (const url of EXTRA_API_URLS) {
+    const extraProducts = await fetchApiProducts(
+      url + 'products',
+      'API_SUPPORTED_PAIRS:' + url
+    )
+
+    if (!extraProducts) {
+      continue
+    }
+
+    const markets = products as string[]
+
+    for (const market of extraProducts) {
+      if (markets.indexOf(market) === -1) {
+        historicalMarketsSources[market] = url
+        markets.push(market)
+      }
+    }
   }
 
   return products
