@@ -601,9 +601,15 @@ async function fetchApiProducts(url: string, cacheKey: string) {
   }
 
   try {
-    const products = await fetch(url).then(response => response.json())
+    const products = await fetch(url).then(response => {
+      if (!response.ok) {
+        throw new Error(`${url} responded with HTTP ${response.status}`)
+      }
 
-    if (!products.length) {
+      return response.json()
+    })
+
+    if (!Array.isArray(products) || !products.length) {
       throw new Error('invalid supported markets list')
     }
 
@@ -640,11 +646,15 @@ export async function getApiSupportedMarkets() {
   }
 
   // tradfi (or any other) markets recorded by another aggr-server
-  for (const url of EXTRA_API_URLS) {
-    const extraProducts = await fetchApiProducts(
-      url + 'products',
-      'API_SUPPORTED_PAIRS:' + url
+  const extraProductsByUrl = await Promise.all(
+    EXTRA_API_URLS.map(url =>
+      fetchApiProducts(url + 'products', 'API_SUPPORTED_PAIRS:' + url)
     )
+  )
+
+  for (let i = 0; i < EXTRA_API_URLS.length; i++) {
+    const url = EXTRA_API_URLS[i]
+    const extraProducts = extraProductsByUrl[i]
 
     if (!extraProducts) {
       continue

@@ -97,6 +97,15 @@ class HistoricalService extends EventEmitter {
         throw responses[0]
       }
 
+      if (results.length < responses.length) {
+        console.warn(
+          '[historical] partial data, failed servers:',
+          urls
+            .filter((url, index) => responses[index] instanceof Error)
+            .map(url => `${url} (${responses[urls.indexOf(url)].message})`)
+        )
+      }
+
       return this.mergeResponses(results)
     })
   }

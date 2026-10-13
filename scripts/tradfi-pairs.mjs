@@ -10,9 +10,10 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { build } from 'esbuild'
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 
 // exchanges with tradfi markets
@@ -120,6 +121,9 @@ async function getTradfiMarkets(exchange) {
     endpoints.map(endpoint =>
       fetchJson(endpoint).catch(error => {
         if (endpoint.optional) {
+          console.warn(
+            `${exchange.id}: optional endpoint failed (${error.message})`
+          )
           return null
         }
 
@@ -144,16 +148,28 @@ async function main() {
   )
 
   const markets = []
+  const emptyExchanges = []
 
   for (const exchange of exchanges) {
     const exchangeMarkets = await getTradfiMarkets(exchange)
     console.error(`${exchange.id}: ${exchangeMarkets.length} tradfi markets`)
     markets.push(...exchangeMarkets)
+
+    if (!exchangeMarkets.length) {
+      emptyExchanges.push(exchange.id)
+    }
   }
 
   const configIndex = process.argv.indexOf('--config')
 
   if (configIndex !== -1) {
+    // an exchange temporarily failing would stop its markets from being recorded
+    if (emptyExchanges.length) {
+      throw new Error(
+        `no tradfi markets for ${emptyExchanges.join(', ')}, config left unchanged`
+      )
+    }
+
     const file = process.argv[configIndex + 1]
     const config = JSON.parse(fs.readFileSync(file, 'utf8'))
 
