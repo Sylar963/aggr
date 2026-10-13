@@ -4,6 +4,7 @@ import { PRODUCTS_EXPIRES_AFTER } from '@/utils/constants'
 import { getApiUrl } from '../utils/helpers'
 import aggregatorService from './aggregatorService'
 import workspacesService from './workspacesService'
+import { getTradfiMarketAlias, normalizeTradfiPair } from '../utils/tradfi'
 
 const COINBASE_INTX_REGEX = /-INTX$/
 const BITFINEX_PERP_REGEX = /F0$/
@@ -14,6 +15,7 @@ const UNDERSCORE_REGEX = /_/
 const DASH_REGEX = /-/
 const DASH_SPOT_REGEX = /-SPOT$/
 const SWAP_OR_PERP_REGEX = /(-|_)swap$|(-|_|:)perp/i
+const SWAP_SUFFIX_REGEX = /-swap$/i
 const TWO_DIGITS_REGEX = /\d{2}/
 const KRAKEN_FUTURES_REGEX = /(PI|FI|PF)_/
 const HUOBI_SUFFIXES_REGEX = /_CW|_CQ|_NW|_NQ/i
@@ -29,6 +31,9 @@ const REVERSE_MATCH_REGEX = /(\w+)[^a-z0-9]/i
 const COMMON_FUTURES_SUFFIX_REGEX = /[HUZ_-]\d{2}/
 const PARSE_MARKET_REGEX = /([^:]*):(.*)/
 const BITUNIX_PERP_REGEX = /[A-Z]/
+const HIP3_DEX_PREFIX_REGEX = /^[a-z0-9]+:/
+const USD_PAIR_REGEX = /^[A-Z0-9]{3,}USD$|^USD[A-Z]{3}$/
+const TRADFI_STORAGE_KEY = 'TRADFI_MARKETS'
 
 const stablecoins = [
   'USDT',
@@ -84,6 +89,45 @@ const promisesOfProducts = {}
 export const indexedProducts = {}
 
 export const marketDecimals = {}
+
+// exchange -> tradfi symbols, persisted so getMarketProduct can stay sync
+const tradfiMarkets: { [exchangeId: string]: Set<string> } = {}
+
+try {
+  const stored = JSON.parse(localStorage.getItem(TRADFI_STORAGE_KEY)) || {}
+
+  for (const exchangeId in stored) {
+    tradfiMarkets[exchangeId] = new Set(stored[exchangeId])
+  }
+} catch (error) {
+  // no stored tradfi markets
+}
+
+function registerTradfiMarkets(exchangeId: string, productsData: ProductsData) {
+  if (!productsData || Array.isArray(productsData) || !productsData.tradfi) {
+    return
+  }
+
+  tradfiMarkets[exchangeId] = new Set(productsData.tradfi)
+
+  try {
+    localStorage.setItem(
+      TRADFI_STORAGE_KEY,
+      JSON.stringify(
+        Object.keys(tradfiMarkets).reduce((acc, id) => {
+          acc[id] = Array.from(tradfiMarkets[id])
+          return acc
+        }, {})
+      )
+    )
+  } catch (error) {
+    console.error('[products] failed to persist tradfi markets', error)
+  }
+}
+
+export function isTradfiMarket(exchangeId: string, symbol: string) {
+  return !!(tradfiMarkets[exchangeId] && tradfiMarkets[exchangeId].has(symbol))
+}
 
 /**
  * 1. app send products request to worker
@@ -269,6 +313,8 @@ export async function getStoredProductsOrFetch(
     productsData = productsStorage.data
   }
 
+  registerTradfiMarkets(exchangeId, productsData)
+
   return productsData
 }
 
@@ -320,7 +366,8 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
     exchangeId === 'BINANCE_FUTURES' ||
     exchangeId === 'DYDX' ||
     exchangeId === 'HYPERLIQUID' ||
-    exchangeId === 'ASTER'
+    exchangeId === 'ASTER' ||
+    exchangeId === 'LIGHTER'
   ) {
     type = 'perp'
   } else if (exchangeId === 'COINBASE' && COINBASE_INTX_REGEX.test(symbol)) {
@@ -347,7 +394,8 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
       type = 'perp'
     }
   } else if (exchangeId === 'BITMEX' || SWAP_OR_PERP_REGEX.test(symbol)) {
-    if (TWO_DIGITS_REGEX.test(symbol)) {
+    // swaps never expire, digits belong to the base (US500-USDT-SWAP)
+    if (TWO_DIGITS_REGEX.test(symbol) && !SWAP_SUFFIX_REGEX.test(symbol)) {
       type = 'future'
     } else {
       type = 'perp'
@@ -366,7 +414,10 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
     type = 'perp'
   }
 
-  let localSymbol = symbol
+  const tradfi = isTradfiMarket(exchangeId, symbol)
+
+  let localSymbol =
+    (tradfi && getTradfiMarketAlias(exchangeId, symbol)) || symbol
 
   if (exchangeId === 'BYBIT' || exchangeId === 'GATEIO') {
     localSymbol = localSymbol.replace(DASH_SPOT_REGEX, '')
@@ -385,7 +436,16 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
   } else if (exchangeId === 'COINBASE' && type === 'perp') {
     localSymbol = localSymbol.replace(COINBASE_INTX_REGEX, '')
   } else if (exchangeId === 'HYPERLIQUID') {
-    localSymbol = localSymbol.replace(/^k/, '') + 'USD'
+    localSymbol = localSymbol.replace(HIP3_DEX_PREFIX_REGEX, '')
+
+    if (!tradfi || !USD_PAIR_REGEX.test(localSymbol)) {
+      localSymbol = localSymbol.replace(/^k/, '') + 'USD'
+    }
+  } else if (exchangeId === 'LIGHTER') {
+    // FX pairs and some stocks already are USD pairs (EURUSD, HYUNDAIUSD)
+    if (!tradfi || !USD_PAIR_REGEX.test(localSymbol)) {
+      localSymbol = localSymbol + 'USD'
+    }
   } else if (exchangeId === 'PHEMEX') {
     localSymbol = localSymbol.replace(/^[a-z]/, '')
   } else if (exchangeId === 'WHITEBIT') {
@@ -440,6 +500,12 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
     quote = match[2] || ''
   }
 
+  if (tradfi) {
+    const normalized = normalizeTradfiPair(base, quote)
+    base = normalized[0]
+    quote = normalized[1]
+  }
+
   if (noStable) {
     localSymbolAlpha = stripStablePair(base + quote)
   } else {
@@ -453,7 +519,8 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
     pair: symbol,
     local: localSymbolAlpha,
     exchange: exchangeId,
-    type
+    type,
+    tradfi
   }
 }
 
@@ -568,6 +635,8 @@ export async function resolvePairs(pairs: string[]) {
     future: searchPreference.futures
   }
   const allTypes = !(searchTypes.spot || searchTypes.perp || searchTypes.future)
+  const searchTradfi = !!searchPreference.tradfi
+  const allCategories = searchTradfi === !!searchPreference.crypto
   const searchQuotes = store.state.settings.searchQuotes
   const allQuotes = !Object.values(searchQuotes).find(filtered => !!filtered)
 
@@ -590,6 +659,10 @@ export async function resolvePairs(pairs: string[]) {
       }
 
       if (!allTypes && !searchTypes[product.type]) {
+        continue
+      }
+
+      if (!allCategories && product.tradfi !== searchTradfi) {
         continue
       }
 

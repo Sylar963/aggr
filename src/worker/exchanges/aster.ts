@@ -1,4 +1,5 @@
 import Exchange from '../exchange'
+import { ASTER_TRADFI_SYMBOLS } from '@/utils/tradfi'
 
 export default class ASTER extends Exchange {
   id = 'ASTER'
@@ -16,18 +17,32 @@ export default class ASTER extends Exchange {
    * Map /fapi/v1/exchangeInfo to a flat list of tradable perp symbols
    * (you can adapt filters depending on what you want to show in aggr)
    */
+  validateProducts(data) {
+    if (!data.tradfi) {
+      return false
+    }
+
+    return true
+  }
+
   formatProducts(response) {
     const products = []
+    const tradfi = []
 
     if (response && Array.isArray(response.symbols)) {
       for (const s of response.symbols) {
         if (s.contractType === 'PERPETUAL' && s.status === 'TRADING') {
           products.push(s.symbol) // e.g. 'BTCUSDT'
+
+          // aster doesn't flag stocks & commodities
+          if (ASTER_TRADFI_SYMBOLS.has(s.symbol)) {
+            tradfi.push(s.symbol)
+          }
         }
       }
     }
 
-    return { products }
+    return { products, tradfi }
   }
 
   /**

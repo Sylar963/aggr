@@ -1,4 +1,5 @@
 import Exchange from '../exchange'
+import { isHip3TradfiMarket } from '@/utils/tradfi'
 
 export default class HYPERLIQUID extends Exchange {
   id = 'HYPERLIQUID'
@@ -7,7 +8,8 @@ export default class HYPERLIQUID extends Exchange {
       {
         url: 'https://api.hyperliquid.xyz/info',
         method: 'POST',
-        data: JSON.stringify({ type: 'meta' }),
+        // main dex + every HIP-3 dex (xyz:TSLA, xyz:GOLD...)
+        data: JSON.stringify({ type: 'allPerpMetas' }),
         proxy: false
       }
     ]
@@ -17,19 +19,39 @@ export default class HYPERLIQUID extends Exchange {
     return 'wss://api.hyperliquid.xyz/ws'
   }
 
+  validateProducts(data) {
+    if (!data.tradfi) {
+      return false
+    }
+
+    return true
+  }
+
   formatProducts(response) {
     const products = []
+    const tradfi = []
 
-    const perpResponse = response
+    for (const meta of response) {
+      if (!meta || !meta.universe) {
+        continue
+      }
 
-    if (perpResponse && perpResponse.universe && perpResponse.universe.length) {
-      for (const product of perpResponse.universe) {
+      for (const product of meta.universe) {
+        if (product.isDelisted) {
+          continue
+        }
+
         products.push(product.name)
+
+        if (isHip3TradfiMarket(product.name)) {
+          tradfi.push(product.name)
+        }
       }
     }
 
     return {
-      products
+      products,
+      tradfi
     }
   }
 

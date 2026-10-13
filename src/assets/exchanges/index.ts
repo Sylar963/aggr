@@ -19,6 +19,7 @@ import HUOBI from './HUOBI.svg'
 import HYPERLIQUID from './HYPERLIQUID.svg'
 import KRAKEN from './KRAKEN.svg'
 import KUCOIN from './KUCOIN.svg'
+import LIGHTER from './LIGHTER.svg'
 import MEXC from './MEXC.svg'
 import MEXC_FUTURES from './MEXC_FUTURES.svg'
 import OKEX from './OKEX.svg'
@@ -53,5 +54,6 @@ export default {
   BITMART,
   HYPERLIQUID,
   WHITEBIT,
-  ASTER
+  ASTER,
+  LIGHTER
 }

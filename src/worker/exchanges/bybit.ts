@@ -5,6 +5,14 @@ const TRADE_TOPIC_REGEX = /^publicTrade\./
 const SPOT_WS = 'wss://stream.bybit.com/v5/public/spot'
 const LINEAR_WS = 'wss://stream.bybit.com/v5/public/linear'
 const INVERSE_WS = 'wss://stream.bybit.com/v5/public/inverse'
+const TRADFI_SYMBOL_TYPES = [
+  'stock',
+  'ETF',
+  'commodity',
+  'forex',
+  'index',
+  'xstocks'
+]
 
 export default class BYBIT extends Exchange {
   id = 'BYBIT'
@@ -13,9 +21,9 @@ export default class BYBIT extends Exchange {
 
   protected endpoints = {
     PRODUCTS: [
-      'https://api.bybit.com/v5/market/instruments-info?category=spot', // BTCUSDT -> BTCUSDT-SPOT
-      'https://api.bybit.com/v5/market/instruments-info?category=linear', // BTCUSDT, BTCPERP, BTC-03NOV23
-      'https://api.bybit.com/v5/market/instruments-info?category=inverse' // BTCUSD, BTCUSDH24
+      'https://api.bybit.com/v5/market/instruments-info?category=spot&limit=1000', // BTCUSDT -> BTCUSDT-SPOT
+      'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000', // BTCUSDT, BTCPERP, BTC-03NOV23
+      'https://api.bybit.com/v5/market/instruments-info?category=inverse&limit=1000' // BTCUSD, BTCUSDH24
     ]
   }
 
@@ -32,7 +40,7 @@ export default class BYBIT extends Exchange {
   }
 
   validateProducts(data) {
-    if (!data.types) {
+    if (!data.types || !data.tradfi) {
       return false
     }
 
@@ -42,6 +50,7 @@ export default class BYBIT extends Exchange {
   formatProducts(response) {
     const products = []
     const types = {}
+    const tradfi = []
 
     for (const data of response) {
       const type = ['spot', 'linear', 'inverse'][response.indexOf(data)]
@@ -51,12 +60,17 @@ export default class BYBIT extends Exchange {
 
         products.push(symbol)
         types[symbol] = type
+
+        if (TRADFI_SYMBOL_TYPES.indexOf(product.symbolType) !== -1) {
+          tradfi.push(symbol)
+        }
       }
     }
 
     return {
       products,
-      types
+      types,
+      tradfi
     }
   }
   /**

@@ -158,6 +158,29 @@
         </label>
       </ToggableSection>
 
+      <ToggableSection title="Market" id="search-market">
+        <label class="checkbox-control -small mb4">
+          <input
+            type="checkbox"
+            class="form-control"
+            :checked="searchTypes.crypto"
+            @change="$store.commit('settings/TOGGLE_SEARCH_TYPE', 'crypto')"
+          />
+          <div></div>
+          <span>Crypto</span>
+        </label>
+        <label class="checkbox-control -small mb4">
+          <input
+            type="checkbox"
+            class="form-control"
+            :checked="searchTypes.tradfi"
+            @change="$store.commit('settings/TOGGLE_SEARCH_TYPE', 'tradfi')"
+          />
+          <div></div>
+          <span>TradFi</span>
+        </label>
+      </ToggableSection>
+
       <ToggableSection id="search-quotes">
         <template v-slot:title>
           <div class="toggable-section__title">
@@ -210,7 +233,7 @@
               class="badge -green ml8"
               v-text="markets.length"
             ></span>
-            <span v-text="localPair"></span>
+            <span v-text="getGroupLabel(localPair)"></span>
           </button>
         </template>
         <template v-else>
@@ -301,7 +324,14 @@
               :class="{ '-active': activeIndex === index }"
               class="-action"
             >
-              <td v-text="group.localPair"></td>
+              <td>
+                {{ getGroupLabel(group.localPair) }}
+                <span
+                  v-if="isTradfiGroup(group.localPair)"
+                  class="badge -outline ml4"
+                  >TradFi</span
+                >
+              </td>
               <td class="-lower">
                 <span class="search-dialog__group-count">
                   <div class="badge mr8">
@@ -333,7 +363,9 @@
               ></td>
               <td v-text="market.exchange"></td>
               <td v-text="market.pair"></td>
-              <td v-text="market.type"></td>
+              <td
+                v-text="market.tradfi ? market.type + ' · tradfi' : market.type"
+              ></td>
               <td class="text-center">
                 <i
                   v-if="historicalMarkets.indexOf(market.id) !== -1"
@@ -410,10 +442,12 @@ import {
   parseMarket,
   stripStableQuote
 } from '@/services/productsService'
+import { getTradfiSearchKeywords } from '@/utils/tradfi'
 import ToggableSection from '@/components/framework/ToggableSection.vue'
 import noResultsPng from '@/assets/noresults.png'
 
 const RESULTS_PER_PAGE = 25
+const TRADFI_GROUP_PREFIX = 'tradfi:'
 
 const selectedProducts = {}
 let flattenedProducts = []
@@ -583,7 +617,9 @@ export default {
         hasHistorical ||
         hasSpot ||
         hasPerpetuals ||
-        hasFutures
+        hasFutures ||
+        this.searchTypes.crypto ||
+        this.searchTypes.tradfi
       )
     },
     historicalMarkets() {
@@ -609,6 +645,8 @@ export default {
       const hasSpot = this.searchTypes.spots
       const hasPerpetuals = this.searchTypes.perpetuals
       const hasFutures = this.searchTypes.futures
+      const hasCrypto = this.searchTypes.crypto
+      const hasTradfi = this.searchTypes.tradfi
 
       const exchanges = this.searchExchanges
       const hasTypeFilters = hasSpot || hasPerpetuals || hasFutures
@@ -646,6 +684,10 @@ export default {
           return false
         }
 
+        if (hasCrypto !== hasTradfi && hasTradfi !== !!a.tradfi) {
+          return false
+        }
+
         return true
       })
     },
@@ -662,16 +704,14 @@ export default {
         .filter(
           product =>
             selection.indexOf(product.id) === -1 &&
-            queryFilter.test(product.local)
+            (queryFilter.test(product.local) ||
+              (product.tradfi &&
+                getTradfiSearchKeywords(product.base).some(keyword =>
+                  queryFilter.test(keyword)
+                )))
         )
         .reduce((groups, product) => {
-          let localPair
-
-          if (product && searchTypes.mergeUsdt) {
-            localPair = product.base + stripStableQuote(product.quote)
-          } else {
-            localPair = product.base + product.quote
-          }
+          const localPair = this.getGroupKey(product)
 
           if (!groups[localPair]) {
             groups[localPair] = []
@@ -766,12 +806,7 @@ export default {
         let localPair = market
 
         if (indexedProduct) {
-          if (indexedProduct && this.searchTypes.mergeUsdt) {
-            localPair =
-              indexedProduct.base + stripStableQuote(indexedProduct.quote)
-          } else {
-            localPair = indexedProduct.base + indexedProduct.quote
-          }
+          localPair = this.getGroupKey(indexedProduct)
         }
 
         if (!groups[localPair]) {
@@ -853,6 +888,29 @@ export default {
     }
   },
   methods: {
+    getGroupKey(product) {
+      let localPair
+
+      if (this.searchTypes.mergeUsdt) {
+        localPair = product.base + stripStableQuote(product.quote)
+      } else {
+        localPair = product.base + product.quote
+      }
+
+      // never merge a stock with a coin using the same ticker (STX, BB...)
+      return product.tradfi ? TRADFI_GROUP_PREFIX + localPair : localPair
+    },
+
+    isTradfiGroup(groupKey) {
+      return groupKey.indexOf(TRADFI_GROUP_PREFIX) === 0
+    },
+
+    getGroupLabel(groupKey) {
+      return this.isTradfiGroup(groupKey)
+        ? groupKey.slice(TRADFI_GROUP_PREFIX.length)
+        : groupKey
+    },
+
     onInput(event) {
       this.page = 0
       this.query = event.target.value

@@ -19,7 +19,7 @@ export default class OKEX extends Exchange {
   }
 
   validateProducts(data: any) {
-    if (!data.types) {
+    if (!data.types || !data.tradfi) {
       return false
     }
 
@@ -32,6 +32,7 @@ export default class OKEX extends Exchange {
     const aliases = {}
     const inversed = {}
     const types = {}
+    const tradfi = []
 
     for (const data of response) {
       for (const product of data.data) {
@@ -59,6 +60,11 @@ export default class OKEX extends Exchange {
 
         types[pair] = type
         products.push(pair)
+
+        // 1 = crypto, 3 = stocks, 4 = commodities, 5 = forex, 6 = bonds
+        if (product.instCategory && product.instCategory !== '1') {
+          tradfi.push(pair)
+        }
       }
     }
 
@@ -67,7 +73,8 @@ export default class OKEX extends Exchange {
       specs,
       aliases,
       inversed,
-      types
+      types,
+      tradfi
     }
   }
 

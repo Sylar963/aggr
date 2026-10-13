@@ -1,10 +1,10 @@
 @font-face {font-family: "icon";
-  src: url('icon.eot?t=1764369506157'); /* IE9*/
-  src: url('icon.eot?t=1764369506157#iefix') format('embedded-opentype'), /* IE6-IE8 */
-  url("icon.woff2?t=1764369506157") format("woff2"),
-  url("icon.woff?t=1764369506157") format("woff"),
-  url('icon.ttf?t=1764369506157') format('truetype'), /* chrome, firefox, opera, Safari, Android, iOS 4.2+*/
-  url('icon.svg?t=1764369506157#icon') format('svg'); /* iOS 4.1- */
+  src: url('icon.eot?t=1791911420387'); /* IE9*/
+  src: url('icon.eot?t=1791911420387#iefix') format('embedded-opentype'), /* IE6-IE8 */
+  url("icon.woff2?t=1791911420387") format("woff2"),
+  url("icon.woff?t=1791911420387") format("woff"),
+  url('icon.ttf?t=1791911420387') format('truetype'), /* chrome, firefox, opera, Safari, Android, iOS 4.2+*/
+  url('icon.svg?t=1791911420387#icon') format('svg'); /* iOS 4.1- */
 }
 
 [class^="icon-"], [class*=" icon-"] {
@@ -39,6 +39,7 @@
 .icon-HYPERLIQUID:before { content: "\ea15"; }
 .icon-KRAKEN:before { content: "\ea16"; }
 .icon-KUCOIN:before { content: "\ea17"; }
+.icon-LIGHTER:before { content: "\ea6c"; }
 .icon-MEXC:before { content: "\ea69"; }
 .icon-MEXC_FUTURES:before { content: "\ea6b"; }
 .icon-OKEX:before { content: "\ea19"; }
@@ -145,6 +146,7 @@ $icon-HUOBI: "\ea14";
 $icon-HYPERLIQUID: "\ea15";
 $icon-KRAKEN: "\ea16";
 $icon-KUCOIN: "\ea17";
+$icon-LIGHTER: "\ea6c";
 $icon-MEXC: "\ea69";
 $icon-MEXC_FUTURES: "\ea6b";
 $icon-OKEX: "\ea19";

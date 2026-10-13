@@ -23,8 +23,17 @@ export default class BITGET extends Exchange {
     return 'wss://ws.bitget.com/v3/ws/public'
   }
 
+  validateProducts(data) {
+    if (!data.tradfi) {
+      return false
+    }
+
+    return true
+  }
+
   formatProducts(responses) {
     const types = {}
+    const tradfi = []
 
     const categories = ['spot', 'usdt-futures', 'coin-futures', 'usdc-futures']
 
@@ -36,6 +45,10 @@ export default class BITGET extends Exchange {
         const symbol = this.formatRemoteToLocalPair(product.symbol, type)
 
         types[symbol] = type
+
+        if (product.isRwa === 'YES') {
+          tradfi.push(symbol)
+        }
       }
     }
 
@@ -43,7 +56,8 @@ export default class BITGET extends Exchange {
 
     return {
       products,
-      types
+      types,
+      tradfi
     }
   }
 
