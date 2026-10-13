@@ -17,7 +17,7 @@ export default class LIGHTER extends Exchange {
 
   // symbol (XAU) -> market id (92), channels are by market id
   private marketIds: { [pair: string]: number }
-  private pairs: { [marketId: string]: string }
+  private pairsByMarketId: { [marketId: string]: string }
 
   protected endpoints = {
     PRODUCTS: [
@@ -31,7 +31,7 @@ export default class LIGHTER extends Exchange {
   }
 
   validateProducts(data) {
-    if (!data.marketIds || !data.tradfi) {
+    if (!data.marketIds || !data.pairsByMarketId || !data.tradfi) {
       return false
     }
 
@@ -41,7 +41,7 @@ export default class LIGHTER extends Exchange {
   formatProducts([details, ...references]) {
     const products = []
     const marketIds = {}
-    const pairs = {}
+    const pairsByMarketId = {}
     const tradfi = []
 
     // lighter doesn't flag stocks, commodities & fx, compare with exchanges that do
@@ -54,7 +54,7 @@ export default class LIGHTER extends Exchange {
 
       products.push(market.symbol)
       marketIds[market.symbol] = market.market_id
-      pairs[market.market_id] = market.symbol
+      pairsByMarketId[market.market_id] = market.symbol
 
       const base = getTradfiBase(market.symbol.replace(USD_SUFFIX_REGEX, '$1'))
 
@@ -73,7 +73,7 @@ export default class LIGHTER extends Exchange {
     return {
       products,
       marketIds,
-      pairs,
+      pairsByMarketId,
       tradfi
     }
   }
@@ -153,7 +153,7 @@ export default class LIGHTER extends Exchange {
   formatTrade(trade, liquidation?: boolean) {
     const output: any = {
       exchange: this.id,
-      pair: this.pairs[trade.market_id],
+      pair: this.pairsByMarketId[trade.market_id],
       timestamp: trade.timestamp,
       price: +trade.price,
       size: +trade.size,

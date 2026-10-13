@@ -710,11 +710,7 @@ export default {
         .filter(
           product =>
             selection.indexOf(product.id) === -1 &&
-            (queryFilter.test(product.local) ||
-              (product.tradfi &&
-                getTradfiSearchKeywords(product.base).some(keyword =>
-                  queryFilter.test(keyword)
-                )))
+            this.matchesQuery(product, product.local, queryFilter)
         )
         .reduce((groups, product) => {
           const localPair = this.getGroupKey(product)
@@ -757,7 +753,8 @@ export default {
       } else {
         return this.filteredProducts.filter(
           product =>
-            selection.indexOf(product.id) === -1 && queryFilter.test(product.id)
+            selection.indexOf(product.id) === -1 &&
+            this.matchesQuery(product, product.id, queryFilter)
         )
       }
     },
@@ -905,6 +902,17 @@ export default {
 
       // never merge a stock with a coin using the same ticker (STX, BB...)
       return product.tradfi ? TRADFI_GROUP_PREFIX + localPair : localPair
+    },
+
+    // tradfi markets also match their keywords (gold -> XAU)
+    matchesQuery(product, text, queryFilter) {
+      return (
+        queryFilter.test(text) ||
+        (product.tradfi &&
+          getTradfiSearchKeywords(product.base).some(keyword =>
+            queryFilter.test(keyword)
+          ))
+      )
     },
 
     isTradfiGroup(groupKey) {

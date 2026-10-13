@@ -29,6 +29,8 @@ const SYMBOL_DELIMITER_REGEX = /[-_/:]/
 const EVERYTHING_BINANCE_REGEX = /BINANCE/
 const REVERSE_MATCH_REGEX = /(\w+)[^a-z0-9]/i
 const COMMON_FUTURES_SUFFIX_REGEX = /[HUZ_-]\d{2}/
+// perpetuals only, digits never mean an expiry there (H100, xyz:XYZ100)
+const PERP_ONLY_EXCHANGES = ['DYDX', 'HYPERLIQUID', 'ASTER', 'LIGHTER']
 const PARSE_MARKET_REGEX = /([^:]*):(.*)/
 const BITUNIX_PERP_REGEX = /[A-Z]/
 const HIP3_DEX_PREFIX_REGEX = /^[a-z0-9]+:/
@@ -402,15 +404,11 @@ export function getMarketProduct(exchangeId, symbol, noStable?: boolean) {
 
   let type = 'spot'
 
-  if (COMMON_FUTURES_SUFFIX_REGEX.test(symbol)) {
+  if (PERP_ONLY_EXCHANGES.indexOf(exchangeId) !== -1) {
+    type = 'perp'
+  } else if (COMMON_FUTURES_SUFFIX_REGEX.test(symbol)) {
     type = 'future'
-  } else if (
-    exchangeId === 'BINANCE_FUTURES' ||
-    exchangeId === 'DYDX' ||
-    exchangeId === 'HYPERLIQUID' ||
-    exchangeId === 'ASTER' ||
-    exchangeId === 'LIGHTER'
-  ) {
+  } else if (exchangeId === 'BINANCE_FUTURES') {
     type = 'perp'
   } else if (exchangeId === 'COINBASE' && COINBASE_INTX_REGEX.test(symbol)) {
     type = 'perp'
