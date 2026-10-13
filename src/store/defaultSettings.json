@@ -29,7 +29,9 @@
     "perpetuals": true,
     "futures": false,
     "normalize": true,
-    "mergeUsdt": true
+    "mergeUsdt": true,
+    "crypto": false,
+    "tradfi": false
   },
   "searchQuotes": {},
   "previousSearchSelections": [],

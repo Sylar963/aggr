@@ -55,6 +55,7 @@ process.env.VITE_APP_EXCHANGES = [
   'CRYPTOCOM',
   'BITMART',
   'HYPERLIQUID',
+  'LIGHTER',
   'WHITEBIT'
 ]
 

@@ -22,6 +22,7 @@ import Huobi from './huobi'
 import Hyperliquid from './hyperliquid'
 import Kraken from './kraken'
 import Kucoin from './kucoin'
+import Lighter from './lighter'
 import Mexc from './mexc/mexc'
 import Okex from './okex'
 import Phemex from './phemex'
@@ -55,6 +56,7 @@ export const exchanges = [
   new CryptoCom(),
   new Bitmart(),
   new Hyperliquid(),
+  new Lighter(),
   new WhiteBIT()
 ] as Exchange[]
 

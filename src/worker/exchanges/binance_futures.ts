@@ -56,10 +56,19 @@ export default class BINANCE_FUTURES extends Exchange {
       : 'wss://fstream.binance.com/market/ws'
   }
 
+  validateProducts(data) {
+    if (!data.tradfi) {
+      return false
+    }
+
+    return true
+  }
+
   formatProducts(response) {
     const products = []
     const specs = {}
     const dapi = {}
+    const tradfi = []
 
     for (const data of response) {
       const type = ['fapi', 'dapi'][response.indexOf(data)]
@@ -82,6 +91,10 @@ export default class BINANCE_FUTURES extends Exchange {
           specs[symbol] = product.contractSize
         }
 
+        if (product.contractType === 'TRADIFI_PERPETUAL') {
+          tradfi.push(symbol)
+        }
+
         products.push(symbol)
       }
     }
@@ -89,7 +102,8 @@ export default class BINANCE_FUTURES extends Exchange {
     return {
       products,
       specs,
-      dapi
+      dapi,
+      tradfi
     }
   }
 
