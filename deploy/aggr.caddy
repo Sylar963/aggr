@@ -7,6 +7,13 @@ charts.oggregator.xyz {
 		-Server
 	}
 
-	reverse_proxy 127.0.0.1:8060
+	# tradfi history server (aggr-server in docker, see aggr-server/tradfi)
+	handle_path /history/* {
+		reverse_proxy 127.0.0.1:3010
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8060
+	}
 }
 # END aggr

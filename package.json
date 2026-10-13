@@ -54,6 +54,7 @@
     "cors-anywhere": "^0.4.4",
     "dexie": "^3.2.1",
     "dexie-export-import": "^1.0.3",
+    "esbuild": "^0.18.20",
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier-vue": "^4.2.0",
