@@ -21,9 +21,16 @@ export default class BYBIT extends Exchange {
 
   protected endpoints = {
     PRODUCTS: [
-      'https://api.bybit.com/v5/market/instruments-info?category=spot&limit=1000', // BTCUSDT -> BTCUSDT-SPOT
-      'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000', // BTCUSDT, BTCPERP, BTC-03NOV23
-      'https://api.bybit.com/v5/market/instruments-info?category=inverse&limit=1000' // BTCUSD, BTCUSDH24
+      'https://api.bybit.com/v5/market/instruments-info?category=spot', // BTCUSDT -> BTCUSDT-SPOT
+      'https://api.bybit.com/v5/market/instruments-info?category=linear', // BTCUSDT, BTCPERP, BTC-03NOV23 (first 500)
+      'https://api.bybit.com/v5/market/instruments-info?category=inverse', // BTCUSD, BTCUSDH24
+      // every linear market (stocks, gold...), the production proxy only allows the urls above
+      {
+        url: 'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000',
+        method: 'GET',
+        proxy: false,
+        optional: true
+      }
     ]
   }
 
@@ -47,14 +54,21 @@ export default class BYBIT extends Exchange {
     return true
   }
 
-  formatProducts(response) {
+  formatProducts([spot, linear, inverse, allLinear]) {
     const products = []
     const types = {}
     const tradfi = []
 
-    for (const data of response) {
-      const type = ['spot', 'linear', 'inverse'][response.indexOf(data)]
+    // direct request may be geo blocked, fallback to the proxied 500 first
+    if (allLinear && allLinear.result && Array.isArray(allLinear.result.list)) {
+      linear = allLinear
+    }
 
+    for (const [type, data] of [
+      ['spot', spot],
+      ['linear', linear],
+      ['inverse', inverse]
+    ]) {
       for (const product of data.result.list) {
         const symbol = `${product.symbol}${type === 'spot' ? '-SPOT' : ''}`
 

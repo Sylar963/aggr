@@ -21,7 +21,12 @@ export default class LIGHTER extends Exchange {
 
   protected endpoints = {
     PRODUCTS: [
-      'https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails',
+      // not allowed by the production proxy, lighter sends CORS headers
+      {
+        url: 'https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails',
+        method: 'GET',
+        proxy: false
+      },
       ...TRADFI_REFERENCE_ENDPOINTS
     ]
   }
