@@ -20,7 +20,8 @@ import {
   isOddTimeframe,
   formatBytes,
   displayCanvasInPopup,
-  sleep
+  sleep,
+  handleFetchError
 } from '@/utils/helpers'
 import { waitForStateMutation } from '@/utils/store'
 import { joinRgba, splitColorCode } from '@/utils/colors'
@@ -47,12 +48,17 @@ import alertService, {
   AlertEventType
 } from '@/services/alertService'
 import historicalService, {
-  HistoricalResponse
+  HistoricalResponse,
+  NO_MORE_DATA
 } from '@/services/historicalService'
 
 import seriesUtils from '@/components/chart/serieUtils'
 
 import ChartCache, { Chunk } from '@/components/chart/cache'
+
+// empty bars in a row before history is considered over
+// (aggr-server keeps 5000 bars per timeframe by default)
+const MAX_EMPTY_BARS = 5000
 
 import {
   createChart as createTVChart,
@@ -2495,16 +2501,14 @@ export default class Chart {
 
     this.isLoading = true
 
-    return historicalService
-      .fetch(
-        rangeToFetch.from * 1000,
-        rangeToFetch.to * 1000,
-        timeframe,
-        this.historicalMarkets
-      )
+    return this.fetchUntilData(rangeToFetch, timeframe)
       .then(results => this.onHistorical(results))
       .catch(err => {
         console.error(err)
+
+        if (err && err.message === NO_MORE_DATA) {
+          handleFetchError(err)
+        }
 
         this.hasReachedEnd = true
       })
@@ -2518,6 +2522,50 @@ export default class Chart {
             this.chartInstance.timeScale().getVisibleLogicalRange()
           )
         }, 200)
+      })
+  }
+
+  /**
+   * Step back over empty ranges until bars are found, thin markets (tradfi
+   * perps off-hours) can go many bars without a trade
+   */
+  fetchUntilData(
+    range: TimeRange,
+    timeframe: number,
+    emptyBars = 0
+  ): Promise<HistoricalResponse> {
+    const markets = this.historicalMarkets
+
+    return historicalService
+      .fetch(range.from * 1000, range.to * 1000, timeframe, markets)
+      .catch(err => {
+        const rangeBars = Math.round((range.to - range.from) / timeframe)
+
+        emptyBars += rangeBars
+
+        if (
+          !err ||
+          err.message !== NO_MORE_DATA ||
+          emptyBars >= MAX_EMPTY_BARS ||
+          markets !== this.historicalMarkets ||
+          timeframe !== +(store.state[this.paneId] as ChartPaneState).timeframe
+        ) {
+          throw err
+        }
+
+        const bars = Math.min(
+          Math.max(rangeBars * 4, 500),
+          MAX_EMPTY_BARS - emptyBars
+        )
+
+        return this.fetchUntilData(
+          {
+            from: range.from - bars * timeframe,
+            to: range.from
+          },
+          timeframe,
+          emptyBars
+        )
       })
   }
 
@@ -2543,8 +2591,6 @@ export default class Chart {
   }
 
   async fetchMore(visibleLogicalRange) {
-    const logicalRangeId = `${visibleLogicalRange.from},${visibleLogicalRange.to}`
-
     if (this.isLoading) {
       return
     }
@@ -2556,6 +2602,8 @@ export default class Chart {
     if (!visibleLogicalRange) {
       return
     }
+
+    const logicalRangeId = `${visibleLogicalRange.from},${visibleLogicalRange.to}`
 
     if (
       visibleLogicalRange.from > 0 &&

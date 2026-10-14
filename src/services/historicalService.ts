@@ -12,6 +12,10 @@ import { historicalMarketsSources, parseMarket } from './productsService'
 
 export type InitialPrices = { [market: string]: number }
 
+// the range has no bars, the caller decides if that's the end of history
+// (thin markets such as tradfi perps can go many bars without a trade)
+export const NO_MORE_DATA = 'No more data'
+
 export interface HistoricalResponse {
   from: number
   to: number
@@ -92,17 +96,30 @@ class HistoricalService extends EventEmitter {
       ) as HistoricalResponse[]
 
       if (!results.length) {
-        // every server failed, report the first error
-        handleFetchError(responses[0])
-        throw responses[0]
+        // every server failed, report the first error that isn't an empty range
+        const error =
+          responses.find(response => response.message !== NO_MORE_DATA) ||
+          responses[0]
+
+        if (error.message !== NO_MORE_DATA) {
+          handleFetchError(error)
+        }
+
+        throw error
       }
 
-      if (results.length < responses.length) {
+      const failedUrls = urls.filter(
+        (url, index) =>
+          responses[index] instanceof Error &&
+          responses[index].message !== NO_MORE_DATA
+      )
+
+      if (failedUrls.length) {
         console.warn(
           '[historical] partial data, failed servers:',
-          urls
-            .filter((url, index) => responses[index] instanceof Error)
-            .map(url => `${url} (${responses[urls.indexOf(url)].message})`)
+          failedUrls.map(
+            url => `${url} (${responses[urls.indexOf(url)].message})`
+          )
         )
       }
 
@@ -170,7 +187,7 @@ class HistoricalService extends EventEmitter {
         }
 
         if (!json.results.length) {
-          throw new Error('No more data')
+          throw new Error(NO_MORE_DATA)
         }
 
         return this.normalizePoints(
@@ -184,7 +201,7 @@ class HistoricalService extends EventEmitter {
         store.commit('app/TOGGLE_LOADING', false)
         delete this.promisesOfData[url]
 
-        if (reportErrors) {
+        if (reportErrors && err.message !== NO_MORE_DATA) {
           handleFetchError(err)
         }
 
