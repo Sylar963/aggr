@@ -76,8 +76,14 @@ export default class ASTER extends Exchange {
     return { products, tradfi }
   }
 
+  getChannels(pair) {
+    const symbol = pair.toLowerCase()
+
+    return [`${symbol}@aggTrade`, `${symbol}@forceOrder`]
+  }
+
   /**
-   * Subscribe to trades
+   * Subscribe to trades and liquidations
    * @param {WebSocket} api
    * @param {string} pair  e.g. 'BTCUSDT'
    */
@@ -86,11 +92,11 @@ export default class ASTER extends Exchange {
       return
     }
 
-    // Aster = Binance clone → SUBSCRIBE / UNSUBSCRIBE with params: ["btcusdt@aggTrade"]
+    // Aster = Binance clone → SUBSCRIBE / UNSUBSCRIBE with params: ["btcusdt@aggTrade", "btcusdt@forceOrder"]
     api.send(
       JSON.stringify({
         method: 'SUBSCRIBE',
-        params: [`${pair.toLowerCase()}@aggTrade`],
+        params: this.getChannels(pair),
         id: Date.now()
       })
     )
@@ -99,7 +105,7 @@ export default class ASTER extends Exchange {
   }
 
   /**
-   * Unsubscribe from trades
+   * Unsubscribe from trades and liquidations
    * @param {WebSocket} api
    * @param {string} pair
    */
@@ -111,7 +117,7 @@ export default class ASTER extends Exchange {
     api.send(
       JSON.stringify({
         method: 'UNSUBSCRIBE',
-        params: [`${pair.toLowerCase()}@aggTrade`],
+        params: this.getChannels(pair),
         id: Date.now()
       })
     )
@@ -134,6 +140,26 @@ export default class ASTER extends Exchange {
     if (json.e === 'aggTrade') {
       const t = this.formatResponse(json)
       return this.emitTrades(api.id, [t])
+    }
+
+    if (json.e === 'forceOrder') {
+      return this.emitLiquidations(api.id, [this.formatLiquidation(json.o)])
+    }
+  }
+
+  /**
+   * Normalize Aster/Binance forceOrder to aggr internal liquidation format
+   * o.S is the side of the liquidation order: BUY = short liquidated
+   */
+  formatLiquidation(o) {
+    return {
+      exchange: this.id,
+      pair: o.s,
+      timestamp: +o.T,
+      price: +o.p,
+      size: +o.q,
+      side: o.S === 'BUY' ? 'buy' : 'sell',
+      liquidation: true
     }
   }
 
