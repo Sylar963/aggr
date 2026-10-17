@@ -8,5 +8,15 @@
     "description": "MRC: SuperSmoother mean with inner/outer channels and overbought/oversold zones",
     "createdAt": 1791676800000,
     "updatedAt": 1791763200000
+  },
+  {
+    "id": "orb",
+    "jsonPath": "library/indicators/custom/orb.json",
+    "imagePath": "library/indicators/custom/orb.png",
+    "author": "Aladhi",
+    "name": "ORB - Opening Range Breakouts",
+    "description": "Opening range with breakout signals and targets (based on LuxAlgo)",
+    "createdAt": 1792195200000,
+    "updatedAt": 1792195200000
   }
 ]
