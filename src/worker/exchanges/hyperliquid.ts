@@ -15,6 +15,11 @@ export default class HYPERLIQUID extends Exchange {
     ]
   }
 
+  // last trade received per coin, see isNewTrade
+  private lastTrades: {
+    [coin: string]: { time: number; tids: { [tid: number]: boolean } }
+  } = {}
+
   async getUrl() {
     return 'wss://api.hyperliquid.xyz/ws'
   }
@@ -65,6 +70,11 @@ export default class HYPERLIQUID extends Exchange {
       return
     }
 
+    if (!this.lastTrades[pair]) {
+      // the snapshot of a first subscribe is already in the chart history
+      this.lastTrades[pair] = { time: Date.now(), tids: {} }
+    }
+
     api.send(
       JSON.stringify({
         method: 'subscribe',
@@ -107,9 +117,36 @@ export default class HYPERLIQUID extends Exchange {
     if (json && json.channel === 'trades') {
       return this.emitTrades(
         api.id,
-        json.data.map(t => this.formatResponse(t))
+        json.data
+          .filter(t => this.isNewTrade(t))
+          .map(t => this.formatResponse(t))
       )
     }
+  }
+
+  /**
+   * every subscribe starts with the last trades again (a reconnect would count them twice)
+   * keep what came after the last trade seen, or after the first subscribe
+   */
+  isNewTrade(t) {
+    let last = this.lastTrades[t.coin]
+
+    if (!last) {
+      last = this.lastTrades[t.coin] = { time: 0, tids: {} }
+    }
+
+    if (t.time < last.time || (t.time === last.time && last.tids[t.tid])) {
+      return false
+    }
+
+    if (t.time > last.time) {
+      last.time = t.time
+      last.tids = {}
+    }
+
+    last.tids[t.tid] = true
+
+    return true
   }
 
   formatResponse(t) {
